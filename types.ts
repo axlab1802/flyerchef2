@@ -10,13 +10,22 @@ export enum CuisineType {
 export interface UserPreferences {
   budget: number;
   cuisine: CuisineType;
-  customCuisine?: string; // Used if CuisineType.OTHER is selected
+  customCuisine?: string;
+  fridgeIngredients?: string[];
 }
 
 export interface Ingredient {
   name: string;
   quantity: string;
-  isDiscounted: boolean; // True if identified from the flyer
+  isDiscounted: boolean;
+}
+
+export interface Nutrition {
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  fiber: number;
 }
 
 export interface Recipe {
@@ -27,14 +36,29 @@ export interface Recipe {
   ingredients: Ingredient[];
   instructions: string[];
   estimatedCost: number;
-  savingsNote: string; // Explains why this is good based on the flyer
+  savingsNote: string;
+  nutrition?: Nutrition;
 }
 
 export interface AnalysisResult {
   isFlyer: boolean;
-  joke?: string; // Content if isFlyer is false
+  joke?: string;
   recipes: Recipe[];
-  detectedDeals: string[]; // List of main items found on sale
+  detectedDeals: string[];
+}
+
+export interface SavedRecipe extends Recipe {
+  savedAt: number;
+  flyerDeals: string[];
+}
+
+export interface ShoppingItem {
+  id: string;
+  name: string;
+  quantity: string;
+  isDiscounted: boolean;
+  checked: boolean;
+  recipeTitle: string;
 }
 
 // For Gemini Schema
@@ -53,6 +77,13 @@ export interface GeminiRecipeResponse {
     instructions: string[];
     estimatedCost: number;
     savingsNote: string;
+    nutrition?: {
+      calories: number;
+      protein: number;
+      fat: number;
+      carbs: number;
+      fiber: number;
+    };
   }[];
   detectedDeals?: string[];
 }

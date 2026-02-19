@@ -1,13 +1,33 @@
 import React, { useState } from 'react';
-import { Recipe } from '../types';
-import { Clock, TrendingDown, ChevronDown, ChevronUp, ShoppingBag } from 'lucide-react';
+import { Recipe, ShoppingItem } from '../types';
+import { Clock, TrendingDown, ChevronDown, ChevronUp, ShoppingBag, Bookmark, BookmarkCheck, ShoppingCart } from 'lucide-react';
+import NutritionBadge from './NutritionBadge';
 
 interface RecipeCardProps {
   recipe: Recipe;
+  isSaved?: boolean;
+  onSave?: (recipe: Recipe) => void;
+  onAddToShoppingList?: (items: ShoppingItem[]) => void;
 }
 
-const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
+const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, isSaved, onSave, onAddToShoppingList }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [addedToList, setAddedToList] = useState(false);
+
+  const handleAddToShoppingList = () => {
+    if (!onAddToShoppingList) return;
+    const items: ShoppingItem[] = recipe.ingredients.map((ing, i) => ({
+      id: `${recipe.id}-ing-${i}`,
+      name: ing.name,
+      quantity: ing.quantity,
+      isDiscounted: ing.isDiscounted,
+      checked: false,
+      recipeTitle: recipe.title,
+    }));
+    onAddToShoppingList(items);
+    setAddedToList(true);
+    setTimeout(() => setAddedToList(false), 2000);
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all hover:shadow-md">
@@ -18,7 +38,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
             ¥{recipe.estimatedCost}
           </span>
         </div>
-        
+
         <p className="text-gray-600 text-sm mb-4">{recipe.description}</p>
 
         <div className="flex items-center space-x-4 mb-4 text-sm text-gray-500">
@@ -27,32 +47,60 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
             {recipe.cookingTimeMinutes}分
           </div>
           <div className="flex items-center text-green-600 font-medium">
-             <TrendingDown className="w-4 h-4 mr-1" />
-             特売活用
+            <TrendingDown className="w-4 h-4 mr-1" />
+            特売活用
           </div>
         </div>
 
-        {/* Savings Note (Why this was chosen) */}
         <div className="bg-green-50 p-3 rounded-lg border border-green-100 mb-4">
           <p className="text-xs text-green-800">
             <span className="font-bold">💡 ポイント:</span> {recipe.savingsNote}
           </p>
         </div>
 
-        {/* Preview of ingredients */}
         <div className="flex flex-wrap gap-2 mb-4">
-            {recipe.ingredients.filter(i => i.isDiscounted).slice(0, 3).map((ing, idx) => (
-                <span key={idx} className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-50 text-red-600 border border-red-100">
-                    <ShoppingBag className="w-3 h-3 mr-1" />
-                    {ing.name}
-                </span>
-            ))}
-            {recipe.ingredients.filter(i => i.isDiscounted).length > 3 && (
-                <span className="text-xs text-gray-400 self-center">+他</span>
-            )}
+          {recipe.ingredients.filter(i => i.isDiscounted).slice(0, 3).map((ing, idx) => (
+            <span key={idx} className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-50 text-red-600 border border-red-100">
+              <ShoppingBag className="w-3 h-3 mr-1" />
+              {ing.name}
+            </span>
+          ))}
+          {recipe.ingredients.filter(i => i.isDiscounted).length > 3 && (
+            <span className="text-xs text-gray-400 self-center">+他</span>
+          )}
         </div>
 
-        <button 
+        {/* Action buttons */}
+        <div className="flex gap-2 mb-2">
+          {onSave && (
+            <button
+              onClick={() => onSave(recipe)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                isSaved
+                  ? 'bg-orange-50 text-orange-600 border-orange-200'
+                  : 'bg-white text-gray-600 border-gray-200 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200'
+              }`}
+            >
+              {isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+              {isSaved ? '保存済み' : 'レシピを保存'}
+            </button>
+          )}
+          {onAddToShoppingList && (
+            <button
+              onClick={handleAddToShoppingList}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                addedToList
+                  ? 'bg-green-50 text-green-600 border-green-200'
+                  : 'bg-white text-gray-600 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200'
+              }`}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              {addedToList ? '追加しました！' : 'リストに追加'}
+            </button>
+          )}
+        </div>
+
+        <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="w-full flex items-center justify-center py-2 text-sm text-gray-500 hover:text-orange-500 transition-colors border-t border-gray-100 mt-2"
         >
@@ -64,13 +112,10 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
         </button>
       </div>
 
-      {/* Expanded Details */}
       {isExpanded && (
-        <div className="bg-gray-50 px-5 py-4 border-t border-gray-100 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="bg-gray-50 px-5 py-4 border-t border-gray-100">
           <div className="mb-6">
-            <h4 className="font-semibold text-gray-700 mb-3 flex items-center">
-              材料
-            </h4>
+            <h4 className="font-semibold text-gray-700 mb-3">材料</h4>
             <ul className="space-y-2 text-sm">
               {recipe.ingredients.map((ing, idx) => (
                 <li key={idx} className="flex justify-between items-center border-b border-gray-200 border-dashed pb-1 last:border-0">
@@ -97,6 +142,8 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
               ))}
             </ol>
           </div>
+
+          {recipe.nutrition && <NutritionBadge nutrition={recipe.nutrition} />}
         </div>
       )}
     </div>

@@ -9,7 +9,6 @@ const fileToBase64 = (file: File): Promise<string> => {
     reader.readAsDataURL(file);
     reader.onload = () => {
       const result = reader.result as string;
-      // Remove data url prefix (e.g. "data:image/jpeg;base64,")
       const base64 = result.split(',')[1];
       resolve(base64);
     };
@@ -18,44 +17,49 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 export const analyzeFlyerAndSuggestRecipes = async (
-  flyerImage: File,
+  flyerImages: File[],
   preferences: UserPreferences
 ): Promise<AnalysisResult> => {
-  const base64Image = await fileToBase64(flyerImage);
   const cuisine = preferences.cuisine === CuisineType.OTHER ? preferences.customCuisine : preferences.cuisine;
+  const fridgeNote = preferences.fridgeIngredients && preferences.fridgeIngredients.length > 0
+    ? `\n    また、冷蔵庫に以下の食材があります。できるだけ活用してください: ${preferences.fridgeIngredients.join('、')}`
+    : '';
 
   const prompt = `
     あなたは「節約料理のエキスパート」兼「鋭いツッコミを持つお笑い芸人」です。
     提供されたファイル（画像またはPDF）が「スーパーのチラシ」かどうかを判定してください。
+    複数のチラシが提供された場合は、すべてのチラシの特売品を組み合わせて活用してください。
 
     【ケース1：スーパーのチラシの場合】
     isFlyer: true
-    予算${preferences.budget}円前後、ジャンル「${cuisine}」で、チラシの特売品(isDiscounted=true)を活用したレシピを3つ提案してください。
+    予算${preferences.budget}円前後、ジャンル「${cuisine}」で、チラシの特売品(isDiscounted=true)を活用したレシピを3つ提案してください。${fridgeNote}
+    各レシピには栄養素情報（カロリー・タンパク質・脂質・炭水化物・食物繊維）も推定して含めてください。
     joke: null
 
     【ケース2：チラシではない場合】
     isFlyer: false
     画像の内容を認識し、それに対して全力で「ボケ」てください。
-    例えば、猫の写真なら「食べちゃいたいくらい可愛いですが、今日の晩御飯にはできません！」、風景写真なら「壮大な景色ですね！でもここには特売のキャベツは生えてなさそうです。」など、画像の内容に即したユーモアたっぷりのコメントを joke フィールドに入れてください。
     detectedDeals, recipes: 空の配列
 
     出力はJSON形式です。
   `;
 
   try {
+    const imageParts = await Promise.all(
+      flyerImages.map(async (file) => ({
+        inlineData: {
+          mimeType: file.type,
+          data: await fileToBase64(file)
+        }
+      }))
+    );
+
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.0-flash",
       contents: {
         parts: [
-          {
-            inlineData: {
-              mimeType: flyerImage.type,
-              data: base64Image
-            }
-          },
-          {
-            text: prompt
-          }
+          ...imageParts,
+          { text: prompt }
         ]
       },
       config: {
@@ -96,9 +100,20 @@ export const analyzeFlyerAndSuggestRecipes = async (
                     type: Type.ARRAY,
                     items: { type: Type.STRING },
                     description: "調理手順のリスト"
+                  },
+                  nutrition: {
+                    type: Type.OBJECT,
+                    properties: {
+                      calories: { type: Type.INTEGER, description: "カロリー(kcal)" },
+                      protein: { type: Type.NUMBER, description: "タンパク質(g)" },
+                      fat: { type: Type.NUMBER, description: "脂質(g)" },
+                      carbs: { type: Type.NUMBER, description: "炭水化物(g)" },
+                      fiber: { type: Type.NUMBER, description: "食物繊維(g)" }
+                    },
+                    required: ["calories", "protein", "fat", "carbs", "fiber"]
                   }
                 },
-                required: ["title", "description", "cookingTimeMinutes", "estimatedCost", "ingredients", "instructions", "savingsNote"]
+                required: ["title", "description", "cookingTimeMinutes", "estimatedCost", "ingredients", "instructions", "savingsNote", "nutrition"]
               }
             }
           },
@@ -114,7 +129,6 @@ export const analyzeFlyerAndSuggestRecipes = async (
 
     const data = JSON.parse(resultText) as GeminiRecipeResponse;
 
-    // Map to internal types and add IDs
     return {
       isFlyer: data.isFlyer,
       joke: data.joke,
