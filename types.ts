@@ -4,6 +4,7 @@ export enum CuisineType {
   CHINESE = '中華',
   OMOTENASHI = 'おもてなし',
   ELABORATE = '凝った料理',
+  MUSCLE = '筋肉飯',
   OTHER = 'その他'
 }
 
