@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { ChefHat, ArrowRight, RotateCcw, Info, Smile, History, Trash2, Clock } from 'lucide-react';
+import { ChefHat, ArrowRight, RotateCcw, Info, Smile, History, Trash2, Clock, Database, Store, Calendar } from 'lucide-react';
 import MultiFlyerUploader from './components/MultiFlyerUploader';
 import PreferencesForm from './components/PreferencesForm';
 import FridgeInput from './components/FridgeInput';
 import RecipeCard from './components/RecipeCard';
 import LoadingOverlay from './components/LoadingOverlay';
 import ShoppingList from './components/ShoppingList';
+import FlyerHistory from './components/FlyerHistory';
 import { CuisineType, UserPreferences, AnalysisResult, SavedRecipe, ShoppingItem, Recipe } from './types';
 import { analyzeFlyerAndSuggestRecipes } from './services/geminiService';
+import { saveFlyer } from './services/flyerDbService';
 
 const STORAGE_KEY = 'flyerchef_saved_recipes';
 
@@ -25,6 +27,11 @@ const App: React.FC = () => {
   const [savedRecipes, setSavedRecipes] = useState<SavedRecipe[]>([]);
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showDbHistory, setShowDbHistory] = useState(false);
+  const [storeName, setStoreName] = useState('');
+  const [flyerDate, setFlyerDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -61,6 +68,20 @@ const App: React.FC = () => {
     });
   };
 
+  const handleSaveToDb = async (analysisResult: AnalysisResult) => {
+    if (flyerFiles.length === 0) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const items = analysisResult.detectedDeals.map((name) => ({ name, isDiscounted: true }));
+      await saveFlyer(flyerFiles, storeName || '不明な店舗', flyerDate, items);
+    } catch (e: any) {
+      setSaveError(e.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleAnalyze = async () => {
     if (flyerFiles.length === 0) {
       setError('チラシファイルをアップロードしてください');
@@ -76,6 +97,9 @@ const App: React.FC = () => {
       const analysisResult = await analyzeFlyerAndSuggestRecipes(flyerFiles, preferences);
       setResult(analysisResult);
       setStep(3);
+      if (analysisResult.isFlyer) {
+        handleSaveToDb(analysisResult);
+      }
     } catch (e: any) {
       setError(e.message || '解析に失敗しました');
     } finally {
@@ -89,6 +113,8 @@ const App: React.FC = () => {
     setResult(null);
     setError(null);
     setShowHistory(false);
+    setShowDbHistory(false);
+    setSaveError(null);
     setPreferences({ budget: 1000, cuisine: CuisineType.JAPANESE, fridgeIngredients: [] });
   };
 
@@ -109,7 +135,14 @@ const App: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { setShowHistory(!showHistory); setStep(1); setResult(null); }}
+              onClick={() => { setShowDbHistory(!showDbHistory); setShowHistory(false); setStep(1); setResult(null); }}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${showDbHistory ? 'bg-indigo-100 text-indigo-600' : 'text-gray-500 hover:text-indigo-500 hover:bg-indigo-50'}`}
+            >
+              <Database className="w-4 h-4" />
+              <span className="hidden sm:inline">チラシDB</span>
+            </button>
+            <button
+              onClick={() => { setShowHistory(!showHistory); setShowDbHistory(false); setStep(1); setResult(null); }}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${showHistory ? 'bg-orange-100 text-orange-600' : 'text-gray-500 hover:text-orange-500 hover:bg-orange-50'}`}
             >
               <History className="w-4 h-4" />
@@ -138,7 +171,10 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* History View */}
+        {/* DB History View */}
+        {showDbHistory && <FlyerHistory />}
+
+        {/* Recipe History View */}
         {showHistory && (
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-gray-800">保存済みレシピ</h2>
@@ -184,6 +220,36 @@ const App: React.FC = () => {
                 <span className="ml-2 text-xs text-gray-400">複数枚OK</span>
               </div>
               <MultiFlyerUploader files={flyerFiles} onFilesChange={setFlyerFiles} />
+
+              {flyerFiles.length > 0 && (
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-600 mb-1.5">
+                      <Store className="w-3.5 h-3.5 text-orange-500" />
+                      店舗名
+                    </label>
+                    <input
+                      type="text"
+                      value={storeName}
+                      onChange={(e) => setStoreName(e.target.value)}
+                      placeholder="例: イオン、西友"
+                      className="w-full px-3 py-2 rounded-lg border-2 border-gray-200 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none text-sm text-gray-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-600 mb-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-orange-500" />
+                      チラシの日付
+                    </label>
+                    <input
+                      type="date"
+                      value={flyerDate}
+                      onChange={(e) => setFlyerDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border-2 border-gray-200 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none text-sm text-gray-800"
+                    />
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className={flyerFiles.length === 0 ? 'opacity-50 pointer-events-none transition-opacity' : 'transition-opacity'}>
@@ -250,6 +316,18 @@ const App: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                {isSaving && (
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 text-sm text-indigo-600 flex items-center gap-2">
+                    <Database className="w-4 h-4 animate-pulse" />
+                    チラシデータをDBに保存中...
+                  </div>
+                )}
+                {saveError && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600">
+                    DB保存エラー: {saveError}
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-bold text-gray-800">おすすめレシピ 3選</h2>

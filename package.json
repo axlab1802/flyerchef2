@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@google/genai": "^1.42.0",
+    "@neondatabase/serverless": "^1.0.2",
+    "@vercel/blob": "^2.2.0",
     "lucide-react": "^0.574.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
