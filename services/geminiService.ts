@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { UserPreferences, AnalysisResult, GeminiRecipeResponse, CuisineType } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
